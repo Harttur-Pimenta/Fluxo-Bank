@@ -66,26 +66,35 @@ class Servico2FA
 
     public function validar(User $user, string $codigo, string $finalidade): CodigoVerificacao
     {
-        return DB::transaction(function () use ($user, $codigo, $finalidade) {
-            // O lock impede o uso concorrente do mesmo código em duas requisições.
+        // A transação confirma o contador de tentativas antes de retornar o erro.
+        // Lançar a exceção dentro da transação faria rollback do incremento.
+        $resultado = DB::transaction(function () use ($user, $codigo, $finalidade) {
             $registro = CodigoVerificacao::where('user_id', $user->id)
                 ->where('finalidade', $finalidade)
                 ->whereNull('utilizado_em')
                 ->latest('id')->lockForUpdate()->first();
 
-            if (! $registro) throw new RegraDeNegocioException('Nenhum código pendente. Solicite um novo.', 401);
-            if ($registro->expira_em->isPast()) throw new RegraDeNegocioException('Código expirado. Solicite um novo.', 401);
+            if (! $registro) return ['erro' => 'Nenhum código pendente. Solicite um novo.', 'status' => 401];
+            if ($registro->expira_em->isPast()) return ['erro' => 'Código expirado. Solicite um novo.', 'status' => 401];
             if ($registro->tentativas >= $registro->max_tentativas) {
-                throw new RegraDeNegocioException('Número de tentativas excedido. Solicite um novo código.', 429);
+                return ['erro' => 'Número de tentativas excedido. Solicite um novo código.', 'status' => 429];
             }
             if (! hash_equals($registro->codigo_hash, hash('sha256', $codigo))) {
                 $registro->increment('tentativas');
                 $registro->refresh();
-                throw new RegraDeNegocioException(
-                    'Código inválido. Tentativas restantes: '.max(0, $registro->max_tentativas - $registro->tentativas).'.', 401);
+                return [
+                    'erro' => 'Código inválido. Tentativas restantes: '.
+                        max(0, $registro->max_tentativas - $registro->tentativas).'.',
+                    'status' => 401,
+                ];
             }
             $registro->update(['utilizado_em' => now()]);
-            return $registro;
+            return ['registro' => $registro];
         });
+
+        if (isset($resultado['erro'])) {
+            throw new RegraDeNegocioException($resultado['erro'], $resultado['status']);
+        }
+        return $resultado['registro'];
     }
 }
