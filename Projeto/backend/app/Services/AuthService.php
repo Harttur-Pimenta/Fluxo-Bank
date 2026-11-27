@@ -152,6 +152,9 @@ class AuthService
         }
         $this->doisFatores->validar($user, $codigo, CodigoVerificacao::FINALIDADE_ATIVACAO_2FA);
         $user->forceFill(['dois_fatores_ativo' => true])->save();
+        // Uma sessão emitida antes da ativação não pode continuar sem 2FA.
+        // Inclui tokens de acesso, renovação e tokens de outros dispositivos.
+        $user->tokens()->delete();
         $this->auditoria->registrar(LogAuditoria::CATEGORIA_ACESSO, '2FA_ATIVADO', [],
             'users', (string) $user->id, $user->id);
     }

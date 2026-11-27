@@ -75,7 +75,10 @@ class AuthController extends Controller
     {
         $dados = $request->validate(['codigo' => 'required|digits:6']);
         $this->auth->ativarDoisFatores($request->user(), $dados['codigo']);
-        return response()->json(['mensagem' => 'Verificação em dois fatores ativada.']);
+        return response()->json([
+            'mensagem' => '2FA ativado. Por segurança, faça login novamente.',
+            'precisa_novo_login' => true,
+        ]);
     }
 
     public function desativarDoisFatores(Request $request): JsonResponse

@@ -474,8 +474,10 @@ class BankActionController extends Controller
         $dados = $request->validate(['codigo' => 'required|digits:6']);
         abort_unless($request->session()->get('fluxo_ativacao_2fa_pendente') === true, 403);
         $servico->ativarDoisFatores($request->user('web'), $dados['codigo']);
-        $request->session()->forget('fluxo_ativacao_2fa_pendente');
-        return back()->with('sucesso', '2FA ativado após confirmar seu e-mail.');
+        auth('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect()->route('web.login')->with('sucesso', '2FA ativado. Entre novamente para usar o código recebido por e-mail.');
     }
 
     public function configurarDoisFatores(Request $request, AuthService $servico): RedirectResponse

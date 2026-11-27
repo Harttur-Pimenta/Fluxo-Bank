@@ -48,8 +48,19 @@ class SegurancaDoisFatoresTest extends TestCase
         ])->assertOk();
         $this->assertTrue((bool) $user->refresh()->dois_fatores_ativo);
 
-        $this->withHeaders($h)->postJson("{$this->api}/2fa/desativar", [])->assertStatus(422);
-        $this->withHeaders($h)->postJson("{$this->api}/2fa/desativar", [
+        $this->withHeaders($h)->getJson("{$this->api}/eu")->assertUnauthorized();
+    }
+
+    public function test_desativacao_exige_senha_atual(): void
+    {
+        $user = $this->usuarioComConta();
+        $user->forceFill(['dois_fatores_ativo' => true])->save();
+        $headers = $this->autenticarSem2fa($user);
+        $this->withHeaders($headers)->postJson("{$this->api}/2fa/desativar", [])->assertStatus(422);
+        $this->withHeaders($headers)->postJson("{$this->api}/2fa/desativar", [
+            'senha_atual' => 'invalida',
+        ])->assertStatus(422);
+        $this->withHeaders($headers)->postJson("{$this->api}/2fa/desativar", [
             'senha_atual' => 'senha123',
         ])->assertOk();
         $this->assertFalse((bool) $user->refresh()->dois_fatores_ativo);

@@ -880,7 +880,7 @@ components:
       bearerFormat: Sanctum
 }
       responses:
-        '200': {description: 2FA ativado}
+        '200': {description: 2FA ativado, tokens anteriores revogados e novo login obrigatório}
         '401': {description: Código inválido ou expirado}
         '429': {description: Tentativas excedidas}
 
