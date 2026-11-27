@@ -84,8 +84,9 @@ class PagamentosService
             throw new RegraDeNegocioException('O valor da cobrança deve ser maior que zero.');
         }
 
-        if ($conta->estaEncerrada()) {
-            throw new RegraDeNegocioException('Conta encerrada não pode emitir cobranças.');
+        if ($conta->status_abertura !== Conta::ABERTURA_APROVADA
+            || $conta->status !== Conta::STATUS_ATIVA || $conta->bloqueada) {
+            throw new RegraDeNegocioException('Sua conta precisa estar ativa e aprovada para emitir cobranças.', 403);
         }
 
         $chave = $conta->chavesPix()->where('status', ChavePix::STATUS_ATIVA)->first();
@@ -219,8 +220,9 @@ class PagamentosService
             throw new RegraDeNegocioException('Use outra conta para pagar esta cobrança.');
         }
 
-        if ($cobranca->conta->estaEncerrada()) {
-            throw new RegraDeNegocioException('A conta recebedora está encerrada.');
+        if ($cobranca->conta->status_abertura !== Conta::ABERTURA_APROVADA
+            || $cobranca->conta->status !== Conta::STATUS_ATIVA || $cobranca->conta->bloqueada) {
+            throw new RegraDeNegocioException('A conta recebedora está indisponível.', 403);
         }
     }
 
