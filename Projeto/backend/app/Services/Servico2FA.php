@@ -7,6 +7,7 @@ use App\Models\CodigoVerificacao;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 
 class Servico2FA
@@ -35,7 +36,7 @@ class Servico2FA
             'user_id' => $user->id,
             'canal' => $canal,
             'finalidade' => $finalidade,
-            'codigo_hash' => hash('sha256', $codigo),
+            'codigo_hash' => Hash::driver('bcrypt')->make($codigo), // 60 caracteres, resistência a brute force offline
             'expira_em' => now()->addMinutes($validade),
             'max_tentativas' => (int) config('fluxo.dois_fatores.max_tentativas'),
         ]);
@@ -79,7 +80,10 @@ class Servico2FA
             if ($registro->tentativas >= $registro->max_tentativas) {
                 return ['erro' => 'Número de tentativas excedido. Solicite um novo código.', 'status' => 429];
             }
-            if (! hash_equals($registro->codigo_hash, hash('sha256', $codigo))) {
+            $correto = strlen($registro->codigo_hash) === 64
+                ? hash_equals($registro->codigo_hash, hash('sha256', $codigo)) // desafios legados (expiram rapidamente)
+                : Hash::driver('bcrypt')->check($codigo, $registro->codigo_hash);
+            if (! $correto) {
                 $registro->increment('tentativas');
                 $registro->refresh();
                 return [
