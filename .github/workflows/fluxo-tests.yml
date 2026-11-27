@@ -49,14 +49,14 @@ jobs:
           find app routes database tests -type f -name '*.php' -print0 |
             xargs -0 -n1 php -l >/dev/null
           echo "Arquivos PHP: sintaxe válida."
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compilar frontend antes de testar Blade
+        run: npm ci --no-audit --no-fund && npm run build
       - name: Testes com PostgreSQL 16
         run: php artisan test --stop-on-failure
         env:
           APP_ENV: testing
           LOG_CHANNEL: stderr
-      - name: Configurar Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Compilar frontend
-        run: npm ci --no-audit --no-fund && npm run build
