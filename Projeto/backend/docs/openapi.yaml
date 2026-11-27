@@ -124,6 +124,783 @@ paths:
         '200': {description: Token definitivo}
         '401': {description: Código inválido/expirado/reutilizado}
 
+  /api/v1/2fa/ativar:
+    post:
+      tags: [Acesso]
+      summary: Solicita ativação de 2FA mediante senha atual; envia código ao e-mail cadastrado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [senha_atual]
+              properties:
+                senha_atual: {type: string, format: password}
+      responses:
+        '202': {description: Código de ativação enviado; 2FA continua desativado até confirmar}
+        '422': {description: Senha incorreta ou ausente}
+        '503': {description: Provedor de e-mail indisponível}
+
+  /api/v1/2fa/confirmar-ativacao:
+    post:
+      tags: [Acesso]
+      summary: Confirma posse do e-mail e ativa 2FA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [codigo]
+              properties:
+                codigo: {type: string, pattern: '^[0-9]{6}
+    post:
+      tags: [Acesso]
+      security: []
+      summary: Solicita recuperação manual de senha informando CPF, e-mail ou telefone
+      description: Normaliza o identificador e vincula internamente ao ID da conta sem expor o ID nem revelar a existência do cadastro.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identificador]
+              properties:
+                identificador: {type: string, example: ana@fluxo.test, description: 'CPF, e-mail ou telefone cadastrado'}
+                motivo: {type: string, nullable: true, example: Esqueci a senha de acesso}
+      responses:
+        '200': {description: Solicitação registrada}
+
+  /api/v1/senha/recuperacao/validar:
+    post:
+      tags: [Acesso]
+      security: []
+      summary: Valida o código numérico de 6 dígitos emitido pelo operador para a conta
+      description: Localiza a conta pelo CPF, e-mail ou telefone informado e valida o código vinculado internamente ao ID da conta (uso único, 10 minutos, máximo de 5 tentativas).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identificador, codigo]
+              properties:
+                identificador: {type: string, example: ana@fluxo.test}
+                codigo: {type: string, example: '048291'}
+      responses:
+        '200':
+          description: Código validado e autorização temporária emitida
+          content:
+            application/json:
+              example:
+                mensagem: Código validado. Utilize a autorização temporária para cadastrar a nova senha.
+                token_redefinicao: '3|temp...'
+                expira_em: '2026-10-28T20:40:00Z'
+        '401': {description: Código inválido, expirado ou já utilizado}
+        '429': {description: Limite de 5 tentativas excedido}
+
+  /api/v1/senha/recuperacao/redefinir:
+    post:
+      tags: [Acesso]
+      security: []
+      summary: Cadastra a nova senha usando a autorização temporária de uso único
+      description: Invalida o código e o token temporário e revoga todas as sessões e tokens de autenticação anteriores.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                token_redefinicao: {type: string, example: '3|temp...'}
+                password: {type: string, minLength: 8, maxLength: 72, example: NovaSenhaForte123}
+                password_confirmation: {type: string, example: NovaSenhaForte123}
+      responses:
+        '200': {description: Senha redefinida e sessões/tokens anteriores revogados}
+        '401': {description: Autorização inválida, expirada ou de outra conta}
+        '422': {description: Senha fora dos requisitos}
+
+  /api/v1/logout:
+    post:
+      tags: [Acesso]
+      summary: Encerra a sessão atual (revoga o token)
+      responses:
+        '200': {description: Sessão encerrada}
+
+  /api/v1/refresh:
+    post:
+      tags: [Acesso]
+      summary: Troca o token antes de expirar (RNF10)
+      responses:
+        '200': {description: Novo token}
+
+  /api/v1/token/renovar:
+    post:
+      tags: [Acesso]
+      security: []
+      summary: Renova uma sessão com refresh token de uso único
+      description: Aceita o refresh token por até sete dias, inclusive após o vencimento do token de acesso.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: {type: string}
+      responses:
+        '200': {description: Novo token de acesso e novo refresh token}
+        '401': {description: Token inválido, expirado ou já utilizado}
+        '422': {description: Campo de renovação inválido}
+
+  /api/v1/eu:
+    get:
+      tags: [Acesso]
+      summary: Dados do usuário logado (cliente mascarado e contas)
+      responses:
+        '200': {description: OK}
+
+  /api/v1/conta:
+    get:
+      tags: [Conta]
+      summary: Saldo derivado dos lançamentos + resumo do dia + limites Pix
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              example:
+                conta: {id: 1, numero: '0001-000123', tipo_conta: CORRENTE, status: ATIVA, bloqueada: false, pode_debitar: true}
+                saldo_centavos: 100000
+                resumo_do_dia: {creditos_centavos: 100000, debitos_centavos: 0, quantidade: 1}
+                limites_pix: {janela: DIURNA, tem_chave_pix_ativa: true, limite_por_transacao_centavos: 500000, limite_diario_centavos: 1000000, disponivel_centavos: 1000000}
+    delete:
+      tags: [Conta]
+      summary: Encerra a conta (exige saldo zero e sem agendamentos)
+
+  /api/v1/conta/extrato:
+    get:
+      tags: [Conta]
+      summary: Extrato paginado (máximo 50 por página — RNF05)
+      parameters:
+        - {in: query, name: page, schema: {type: integer, default: 1}}
+        - {in: query, name: per_page, schema: {type: integer, default: 50, maximum: 50}}
+      responses:
+        '200': {description: OK}
+
+  /api/v1/conta/extrato/categorizado:
+    get:
+      tags: [Conta]
+      summary: Totais por categoria no período
+      responses:
+        '200': {description: OK}
+
+  /api/v1/conta/bloqueio:
+    post:
+      tags: [Conta]
+      summary: Autobloqueio preventivo da conta (RF13)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [motivo], properties: {motivo: {type: string}}}
+      responses:
+        '200': {description: Conta bloqueada}
+    delete:
+      tags: [Conta]
+      summary: Desbloqueia a própria conta
+      responses:
+        '200': {description: Conta desbloqueada}
+
+  /api/v1/transferencias:
+    post:
+      tags: [Pix]
+      summary: Transferência interna ou Pix (por conta ou por chave)
+      description: |
+        Valida limites (RN28-RN30/RN42), saldo e grava 2 lançamentos (partidas
+        dobradas). Aceita `Idempotency-Key`.
+      parameters:
+        - {in: header, name: Idempotency-Key, schema: {type: string}, required: false}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor_centavos]
+              properties:
+                conta_destino_id: {type: integer, example: 2}
+                chave_pix: {type: string, example: bruno@fluxo.test}
+                valor_centavos: {type: integer, example: 25000}
+                descricao: {type: string, nullable: true}
+      responses:
+        '201': {description: Transação criada com os 2 lançamentos}
+        '422': {description: Saldo insuficiente, limite excedido ou valor inválido}
+        '403': {description: Conta bloqueada ou KYC não aprovado}
+
+  /api/v1/transacoes:
+    get:
+      tags: [Conta]
+      summary: Últimas transações da conta
+      responses:
+        '200': {description: OK}
+
+  /api/v1/transacoes/{id}:
+    get:
+      tags: [Conta]
+      summary: Comprovante da transação
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Comprovante com autenticação}
+        '404': {description: Transação de outra conta}
+
+  /api/v1/transacoes/{id}/comprovante.pdf:
+    get:
+      tags: [Transações]
+      summary: Baixa o comprovante do titular em PDF
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          description: Comprovante da operação
+          content:
+            application/pdf:
+              schema: {type: string, format: binary}
+        '404': {description: Transação inexistente ou sem acesso}
+
+  /api/v1/chaves-pix:
+    get:
+      tags: [Pix]
+      summary: Lista as chaves da conta
+      responses:
+        '200': {description: OK}
+    post:
+      tags: [Pix]
+      summary: Cadastra chave Pix (CPF, CNPJ, E-MAIL, TELEFONE, ALEATÓRIA)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo_chave]
+              properties:
+                tipo_chave: {type: string, enum: [CPF, CNPJ, EMAIL, TELEFONE, ALEATORIA]}
+                valor_chave: {type: string, nullable: true}
+      responses:
+        '201': {description: Chave registrada}
+        '409': {description: Chave já registrada em outra conta}
+
+  /api/v1/chaves-pix/{id}:
+    delete:
+      tags: [Pix]
+      summary: Revoga a chave
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Chave revogada}
+
+  /api/v1/pix/cobrancas:
+    get:
+      tags: [Pix]
+      summary: Lista cobranças emitidas pelo cliente, com paginação e situação atual
+      responses:
+        '200': {description: Histórico paginado, códigos visíveis apenas para cobranças ativas}
+    post:
+      tags: [Pix]
+      summary: Gera payload EMV (copia e cola) com CRC16 válido (RF15/RN36)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor_centavos]
+              properties:
+                valor_centavos: {type: integer, example: 2500}
+                descricao: {type: string, nullable: true}
+                expiracao_minutos: {type: integer, minimum: 1, maximum: 1440, default: 5}
+      responses:
+        '201': {description: "Payload gerado (payload_emv, crc16, valido, expiracao_minutos, cobranca_id)"}
+        '403': {description: Conta recebedora pendente, bloqueada ou indisponível}
+
+  /api/v1/pix/cobrancas/{cobranca}:
+    delete:
+      tags: [Pix]
+      summary: Cancela uma cobrança ativa pertencente à conta autenticada
+      parameters:
+        - in: path
+          name: cobranca
+          required: true
+          schema: {type: integer}
+      responses:
+        '200': {description: Cobrança cancelada}
+        '404': {description: Cobrança de outra conta ou inexistente}
+        '409': {description: Cobrança já paga ou expirada}
+
+  /api/v1/pix/pagamentos/revisar:
+    post:
+      tags: [Pix]
+      summary: Consulta favorecido, valor e vencimento de uma cobrança Fluxo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payload_emv]
+              properties:
+                payload_emv: {type: string, maxLength: 512}
+      responses:
+        '200': {description: Dados para confirmar a cobrança sem movimentar a conta}
+        '409': {description: Cobrança já paga}
+        '422': {description: Código inválido, expirado ou emitido fora do Fluxo}
+
+  /api/v1/pix/pagamentos:
+    post:
+      tags: [Pix]
+      summary: Efetiva o pagamento de uma cobrança Fluxo por QR Pix
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payload_emv]
+              properties:
+                payload_emv: {type: string, maxLength: 512}
+      responses:
+        '201': {description: Pagamento registrado com transacao_id}
+        '409': {description: Cobrança já paga por outra conta ou conflito financeiro}
+        '422': {description: Código ou operação inválida}
+
+  /api/v1/pix/recebimentos:
+    post:
+      tags: [Pix]
+      summary: Registra recebimento de teste com a simulação habilitada e perfil ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor_centavos]
+              properties:
+                valor_centavos: {type: integer}
+                descricao: {type: string, nullable: true}
+      responses:
+        '201': {description: Recebimento simulado registrado}
+        '403': {description: Simulação indisponível neste ambiente}
+
+  /api/v1/pix/limites:
+    get:
+      tags: [Pix]
+      summary: Limites vigentes e quanto ainda pode transferir hoje
+      responses:
+        '200': {description: OK}
+
+    patch:
+      tags: [Pix]
+      summary: Ajusta os limites Pix em centavos dentro dos tetos aprovados
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [por_transacao, diario, noturno]
+              properties:
+                por_transacao: {type: integer, minimum: 1}
+                diario: {type: integer, minimum: 1}
+                noturno: {type: integer, minimum: 1}
+      responses:
+        '200': {description: Limites e disponibilidade atualizados}
+        '422': {description: Valor fora dos tetos aprovados}
+
+  /api/v1/boletos/validar:
+    post:
+      tags: [Pagamentos]
+      summary: Valida o formato do código de barras (44 dígitos) ou da linha (47 ou 48)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [linha_digitavel], properties: {linha_digitavel: {type: string}}}
+      responses:
+        '200': {description: Linha válida}
+        '422': {description: Linha inválida}
+
+  /api/v1/boletos/pagar:
+    post:
+      tags: [Pagamentos]
+      summary: Paga boleto debitando a conta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [linha_digitavel, valor_centavos]
+              properties:
+                linha_digitavel: {type: string}
+                valor_centavos: {type: integer}
+      responses:
+        '201': {description: Boleto pago}
+        '422': {description: Linha inválida ou saldo insuficiente}
+
+  /api/v1/cartoes:
+    get:
+      tags: [Cartões]
+      summary: Lista os cartões da conta (físico e virtual)
+      responses:
+        '200': {description: OK}
+    post:
+      tags: [Cartões]
+      summary: Emite cartão físico (DÉBITO ou CRÉDITO)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modalidade]
+              properties:
+                modalidade: {type: string, enum: [DEBITO, CREDITO]}
+                endereco_entrega: {type: string, nullable: true}
+      responses:
+        '201': {description: Cartão emitido (compras on-line começam desabilitadas — RN39)}
+
+  /api/v1/cartoes/{id}/virtual:
+    post:
+      tags: [Cartões]
+      summary: Gera o cartão virtual a partir do físico ativo (RN38)
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      responses:
+        '201': {description: Virtual criado}
+        '422': {description: Físico bloqueado ou virtual já existente}
+
+  /api/v1/cartoes/{id}/bloqueio:
+    patch:
+      tags: [Cartões]
+      summary: Bloqueia/desbloqueia o cartão
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [bloquear], properties: {bloquear: {type: boolean}}}
+      responses:
+        '200': {description: OK}
+
+  /api/v1/cartoes/{id}/limite:
+    patch:
+      tags: [Cartões]
+      summary: Ajusta o limite dentro do teto pré-aprovado
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [limite_centavos], properties: {limite_centavos: {type: integer}}}
+      responses:
+        '200': {description: OK}
+        '422': {description: Acima do teto}
+
+  /api/v1/cartoes/{id}/compras-online:
+    patch:
+      tags: [Cartões]
+      summary: Libera/bloqueia compras on-line no cartão físico (RN39)
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [permitir], properties: {permitir: {type: boolean}}}
+      responses:
+        '200': {description: OK}
+
+  /api/v1/assinaturas-cartao:
+    get:
+      tags: [Cartões]
+      summary: Recorrências detectadas no cartão (read model — RN40)
+      responses:
+        '200': {description: OK}
+
+  /api/v1/avisos-viagem:
+    get:
+      tags: [Cartões]
+      summary: Lista avisos de viagem da conta
+      responses:
+        '200': {description: OK}
+    post:
+      tags: [Cartões]
+      summary: Cria aviso de viagem para UM cartão (RN44)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cartao_id, localidades, data_inicio, data_fim]
+              properties:
+                cartao_id: {type: integer}
+                localidades: {type: array, items: {type: string}}
+                data_inicio: {type: string, format: date}
+                data_fim: {type: string, format: date}
+      responses:
+        '201': {description: Aviso registrado}
+
+  /api/v1/agendamentos:
+    get:
+      tags: [Agendamentos]
+      summary: Lista os agendamentos da conta
+      responses:
+        '200': {description: OK}
+    post:
+      tags: [Agendamentos]
+      summary: Agenda uma transferência ou o pagamento de boleto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor_centavos, agendado_para]
+              properties:
+                tipo_operacao: {type: string, enum: [TED_INTERNA, BOLETO], default: TED_INTERNA}
+                conta_destino_id: {type: integer, description: Obrigatório para transferência}
+                linha_digitavel: {type: string, description: Obrigatória para boleto}
+                recorrente: {type: boolean, description: Repetição mensal de transferência}
+                valor_centavos: {type: integer}
+                agendado_para: {type: string, format: date-time}
+                descricao: {type: string, nullable: true}
+      responses:
+        '201': {description: Agendamento criado}
+        '422': {description: Data no passado etc.}
+
+  /api/v1/agendamentos/{id}:
+    delete:
+      tags: [Agendamentos]
+      summary: Cancela agendamento AGENDADO
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Cancelado}
+
+  /api/v1/planos:
+    get:
+      tags: [Assinaturas]
+      summary: Catálogo de planos e itens
+      responses:
+        '200': {description: OK}
+
+  /api/v1/assinaturas:
+    get:
+      tags: [Assinaturas]
+      summary: Assinaturas do cliente (com cobranças)
+      responses:
+        '200': {description: OK}
+    post:
+      tags: [Assinaturas]
+      summary: Contrata plano com fatura proporcional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plano_id]
+              properties:
+                plano_id: {type: integer}
+                dia_cobranca: {type: integer, minimum: 1, maximum: 28}
+      responses:
+        '201': {description: Assinatura criada}
+
+  /api/v1/assinaturas/{id}/itens/{item}:
+    delete:
+      tags: [Assinaturas]
+      summary: Retira item do plano — exclusão LÓGICA (RN22)
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+        - {in: path, name: item, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [motivo], properties: {motivo: {type: string}}}
+      responses:
+        '200': {description: Item retirado (data_exclusao/motivo preenchidos)}
+
+  /api/v1/chamados:
+    get:
+      tags: [Suporte]
+      summary: Chamados do cliente
+      responses:
+        '200': {description: OK}
+    post:
+      tags: [Suporte]
+      summary: Abre chamado de suporte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assunto, mensagem]
+              properties: {assunto: {type: string}, mensagem: {type: string}}
+      responses:
+        '201': {description: Chamado aberto}
+
+  /api/v1/backoffice/resumo:
+    get:
+      tags: [Backoffice]
+      summary: Indicadores gerais (exige perfil ATENDENTE/ADMIN)
+      responses:
+        '200': {description: OK}
+        '403': {description: Sem permissão}
+
+  /api/v1/backoffice/contas:
+    get:
+      tags: [Backoffice]
+      summary: Lista contas filtrando por status/KYC
+      responses:
+        '200': {description: OK}
+
+  /api/v1/backoffice/contas/{id}/kyc/aprovar:
+    post:
+      tags: [Backoffice]
+      summary: Aprova o KYC e ativa a conta (RN37)
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Conta ativada}
+
+  /api/v1/backoffice/contas/{id}/kyc/recusar:
+    post:
+      tags: [Backoffice]
+      summary: Recusa o KYC e bloqueia a conta
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [motivo], properties: {motivo: {type: string}}}
+      responses:
+        '200': {description: KYC recusado}
+
+  /api/v1/backoffice/contas/{id}/bloquear-fraude:
+    post:
+      tags: [Backoffice]
+      summary: Bloqueia conta por suspeita de fraude
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [motivo], properties: {motivo: {type: string}}}
+      responses:
+        '200': {description: Conta bloqueada}
+
+  /api/v1/backoffice/contas/{id}/recuperacao-senha:
+    post:
+      tags: [Backoffice]
+      summary: Gera código manual de 6 dígitos para recuperação de senha da conta (somente ADMIN + 2FA concluído)
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      responses:
+        '201': {description: Código de 6 dígitos emitido (validade de 10 min, uso único)}
+        '403': {description: Restrito ao perfil ADMIN com 2FA concluído}
+
+  /api/v1/backoffice/recuperacao-senha/emitir:
+    post:
+      tags: [Backoffice]
+      summary: Localiza a conta por CPF, e-mail, telefone ou ID e gera o código manual de 6 dígitos (somente ADMIN + 2FA concluído)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identificador]
+              properties:
+                identificador: {type: string, example: ana@fluxo.test, description: 'CPF, e-mail ou telefone do titular'}
+      responses:
+        '201': {description: Código de 6 dígitos emitido (validade de 10 min, uso único)}
+        '403': {description: Restrito ao perfil ADMIN com 2FA concluído}
+        '404': {description: Conta não localizada}
+
+  /api/v1/backoffice/auditoria:
+    get:
+      tags: [Backoffice]
+      summary: Consulta a trilha (append-only) com filtros
+      parameters:
+        - {in: query, name: categoria, schema: {type: string, enum: [ACESSO, CONSULTA, MOVIMENTACAO, SISTEMA]}}
+        - {in: query, name: tabela, schema: {type: string}}
+        - {in: query, name: usuario_id, schema: {type: integer}}
+        - {in: query, name: de, schema: {type: string, format: date}}
+        - {in: query, name: ate, schema: {type: string, format: date}}
+      responses:
+        '200': {description: Registros + total}
+
+  /api/v1/backoffice/chamados/{id}:
+    patch:
+      tags: [Backoffice]
+      summary: Responde um chamado
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resposta]
+              properties:
+                resposta: {type: string}
+                status: {type: string, enum: [EM_ATENDIMENTO, RESOLVIDO]}
+      responses:
+        '200': {description: Respondido}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+}
+      responses:
+        '200': {description: 2FA ativado}
+        '401': {description: Código inválido ou expirado}
+        '429': {description: Tentativas excedidas}
+
+  /api/v1/2fa/desativar:
+    post:
+      tags: [Acesso]
+      summary: Desativa o 2FA após reconfirmação da senha atual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [senha_atual]
+              properties:
+                senha_atual: {type: string, format: password}
+      responses:
+        '200': {description: 2FA desativado}
+        '422': {description: Senha incorreta ou ausente}
+
   /api/v1/senha/recuperacao/solicitar:
     post:
       tags: [Acesso]
@@ -376,6 +1153,11 @@ paths:
         '200': {description: Chave revogada}
 
   /api/v1/pix/cobrancas:
+    get:
+      tags: [Pix]
+      summary: Lista cobranças emitidas pelo cliente, com paginação e situação atual
+      responses:
+        '200': {description: Histórico paginado, códigos visíveis apenas para cobranças ativas}
     post:
       tags: [Pix]
       summary: Gera payload EMV (copia e cola) com CRC16 válido (RF15/RN36)
@@ -389,8 +1171,24 @@ paths:
               properties:
                 valor_centavos: {type: integer, example: 2500}
                 descricao: {type: string, nullable: true}
+                expiracao_minutos: {type: integer, minimum: 1, maximum: 1440, default: 5}
       responses:
-        '201': {description: "Payload gerado (payload_emv, crc16, valido)"}
+        '201': {description: "Payload gerado (payload_emv, crc16, valido, expiracao_minutos, cobranca_id)"}
+        '403': {description: Conta recebedora pendente, bloqueada ou indisponível}
+
+  /api/v1/pix/cobrancas/{cobranca}:
+    delete:
+      tags: [Pix]
+      summary: Cancela uma cobrança ativa pertencente à conta autenticada
+      parameters:
+        - in: path
+          name: cobranca
+          required: true
+          schema: {type: integer}
+      responses:
+        '200': {description: Cobrança cancelada}
+        '404': {description: Cobrança de outra conta ou inexistente}
+        '409': {description: Cobrança já paga ou expirada}
 
   /api/v1/pix/pagamentos/revisar:
     post:
