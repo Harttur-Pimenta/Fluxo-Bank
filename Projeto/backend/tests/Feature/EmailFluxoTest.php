@@ -5,13 +5,13 @@ namespace Tests\Feature;
 use App\Models\Conta;
 use App\Services\ContaService;
 use App\Services\EntregaEmailService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class EmailFluxoTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations; // afterCommit precisa ser executado fora da transação do RefreshDatabase
 
     public function test_envia_email_kyc_apos_aprovacao(): void
     {
