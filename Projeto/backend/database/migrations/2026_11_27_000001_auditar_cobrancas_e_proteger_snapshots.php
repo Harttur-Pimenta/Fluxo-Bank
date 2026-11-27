@@ -23,7 +23,9 @@ return new class extends Migration
                             WHEN lower(k) ~ '(password|senha|token|secret|segredo|codigo|cvv|authorization|api_key|chave_privada|pin|otp|hash|salt|payload|remember|session)'
                                 THEN to_jsonb('[PROTEGIDO]'::text)
                             WHEN lower(k) IN ('cpf','cnpj','email','numero_cartao','cartao','documento','valor_chave','telefone','celular','phone',
-                                'descricao','mensagem','motivo','resposta','endereco','endereco_entrega','representante_legal')
+                                'descricao','mensagem','motivo','resposta','endereco','endereco_entrega','representante_legal',
+                                'nome','name','razao_social','data_nascimento','estabelecimento','assunto','erro',
+                                'user_agent','ip_address','payload_operacao','numero','numero_conta')
                                 THEN to_jsonb('[MASCARADO]'::text)
                             WHEN jsonb_typeof(v) IN ('object','array')
                                 THEN to_jsonb('[PROTEGIDO]'::text)
