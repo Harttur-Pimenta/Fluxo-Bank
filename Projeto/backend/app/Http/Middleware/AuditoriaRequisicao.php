@@ -3,33 +3,47 @@
 namespace App\Http\Middleware;
 
 use App\Services\AuditoriaService;
+use App\Exceptions\RegraDeNegocioException;
 use App\Support\Sanitizador;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
-/**
- * Middleware de auditoria de requisições HTTP e propagação de contexto de sessão ao PostgreSQL.
- */
+/** Registra sucessos e exceções sem colocar segredos nos logs. */
 class AuditoriaRequisicao
 {
     public function __construct(private AuditoriaService $auditoria) {}
 
     public function handle(Request $request, Closure $next): Response
     {
-        $requestId = $request->header('X-Request-Id');
-
-        if (! $requestId || ! Str::isUuid($requestId)) {
-            $requestId = (string) Str::uuid();
-        }
-
+        // Um identificador de auditoria nunca é controlado por quem fez a requisição.
+        $requestId = (string) Str::uuid();
         $request->attributes->set('request_id', $requestId);
 
-        $response = $next($request);
+        try {
+            $response = $next($request);
+        } catch (\Throwable $erro) {
+            $status = $erro instanceof HttpExceptionInterface ? $erro->getStatusCode() : 500;
+            if ($erro instanceof RegraDeNegocioException) {
+                $status = $erro->statusHttp();
+            } elseif ($erro instanceof \Illuminate\Validation\ValidationException) {
+                $status = $erro->status;
+            } elseif ($erro instanceof \Illuminate\Auth\AuthenticationException) {
+                $status = 401;
+            }
+            $this->registrar($request, $status);
+            throw $erro;
+        }
 
         $response->headers->set('X-Request-Id', $requestId);
+        $this->registrar($request, $response->getStatusCode());
+        return $response;
+    }
 
+    private function registrar(Request $request, int $status): void
+    {
         try {
             $this->auditoria->registrar(
                 $this->auditoria->categoriaDaRequisicao($request),
@@ -37,19 +51,13 @@ class AuditoriaRequisicao
                 [
                     'rota' => $request->path(),
                     'metodo' => $request->method(),
-                    'status_http' => $response->getStatusCode(),
+                    'status_http' => $status,
                     'dados' => Sanitizador::dadosDaRequisicao($request->input()),
                 ],
-                'http',
-                null,
-                $request->user()?->id,
-                $request,
-                $response->getStatusCode(),
+                'http', null, $request->user()?->id, $request, $status,
             );
-        } catch (\Throwable $e) {
-            report($e);
+        } catch (\Throwable $falhaLog) {
+            report($falhaLog);
         }
-
-        return $response;
     }
 }

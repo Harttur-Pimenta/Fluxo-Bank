@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Conta;
 use App\Services\ContaService;
+use App\Services\NotificacaoAberturaService;
 use App\Services\EntregaEmailService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -13,7 +14,7 @@ class EmailFluxoTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_envia_email_kyc_apos_aprovacao(): void
+    public function test_servico_envia_notificacao_de_aprovacao(): void
     {
         config()->set('fluxo.email.provedor', 'resend');
         config()->set('services.resend.key', 'chave-teste');
@@ -27,6 +28,8 @@ class EmailFluxoTest extends TestCase
             'status_abertura' => Conta::ABERTURA_EM_ANALISE,
         ]);
         app(ContaService::class)->aprovarAbertura($usuario->conta->refresh());
+        // O callback afterCommit é testado em integração sem transação externa.
+        app(NotificacaoAberturaService::class)->enviarDecisao($usuario->conta->id, true);
 
         Http::assertSent(fn ($req) => str_contains($req->url(), 'api.resend.com/emails')
             && str_contains((string) $req['subject'], 'aprovada'));

@@ -131,19 +131,39 @@ class AuthService
         $this->auditoria->registrar(LogAuditoria::CATEGORIA_ACESSO, 'LOGOUT', [], usuarioId: $user->id);
     }
 
-    public function ativarDoisFatores(User $user): void
+    public function solicitarAtivacaoDoisFatores(User $user): array
     {
+        if ($user->dois_fatores_ativo) {
+            throw new RegraDeNegocioException('A verificação em duas etapas já está ativa.', 409);
+        }
         if (! config('fluxo.dois_fatores.entrega_email_ativa')
             || config('fluxo.dois_fatores.canal') !== 'EMAIL'
             || ! app(EntregaEmailService::class)->disponivel()) {
-            throw new RegraDeNegocioException('Configure um serviço de envio de e-mail antes de ativar o 2FA.', 503);
+            throw new RegraDeNegocioException('Configure o envio de e-mail antes de ativar o 2FA.', 503);
         }
+
+        return $this->doisFatores->gerar($user, CodigoVerificacao::FINALIDADE_ATIVACAO_2FA);
+    }
+
+    public function ativarDoisFatores(User $user, string $codigo): void
+    {
+        if ($user->dois_fatores_ativo) {
+            throw new RegraDeNegocioException('A verificação em duas etapas já está ativa.', 409);
+        }
+        $this->doisFatores->validar($user, $codigo, CodigoVerificacao::FINALIDADE_ATIVACAO_2FA);
         $user->forceFill(['dois_fatores_ativo' => true])->save();
+        // Uma sessão emitida antes da ativação não pode continuar sem 2FA.
+        // Inclui tokens de acesso, renovação e tokens de outros dispositivos.
+        $user->tokens()->delete();
+        $this->auditoria->registrar(LogAuditoria::CATEGORIA_ACESSO, '2FA_ATIVADO', [],
+            'users', (string) $user->id, $user->id);
     }
 
     public function desativarDoisFatores(User $user): void
     {
         $user->forceFill(['dois_fatores_ativo' => false])->save();
+        $this->auditoria->registrar(LogAuditoria::CATEGORIA_ACESSO, '2FA_DESATIVADO', [],
+            'users', (string) $user->id, $user->id);
     }
 
     private function emitirToken(User $user, bool $comRenovacao = false): array

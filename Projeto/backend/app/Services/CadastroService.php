@@ -39,7 +39,7 @@ class CadastroService
                 'email' => $dados['email'],
                 'password' => $dados['password'],
                 'perfil' => User::PERFIL_CLIENTE,
-                'dois_fatores_ativo' => (bool) ($dados['dois_fatores_ativo'] ?? config('fluxo.dois_fatores.ativo_por_padrao')),
+                'dois_fatores_ativo' => false, // Exige confirmação de posse do e-mail pelo usuário
             ]);
 
             $cliente = Cliente::create([

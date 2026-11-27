@@ -469,19 +469,29 @@ class BankActionController extends Controller
         return back()->with('sucesso', 'Conta encerrada.');
     }
 
+    public function confirmarAtivacaoDoisFatores(Request $request, AuthService $servico): RedirectResponse
+    {
+        $dados = $request->validate(['codigo' => 'required|digits:6']);
+        abort_unless($request->session()->get('fluxo_ativacao_2fa_pendente') === true, 403);
+        $servico->ativarDoisFatores($request->user('web'), $dados['codigo']);
+        auth('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect()->route('web.login')->with('sucesso', '2FA ativado. Entre novamente para usar o código recebido por e-mail.');
+    }
+
     public function configurarDoisFatores(Request $request, AuthService $servico): RedirectResponse
     {
-        $dados = $request->validate(['ativar' => 'required|boolean']);
+        $dados = $request->validate(['ativar' => 'required|boolean', 'current_password' => 'required|current_password:web']);
         $user = $request->user('web');
-        if ($dados['ativar'] && ! config('fluxo.dois_fatores.entrega_email_ativa', false)) {
-            return back()->with('erro', 'A ativação do 2FA exige serviço de e-mail transacional configurado.');
-        }
         if ($dados['ativar']) {
-            $servico->ativarDoisFatores($user);
-        } else {
-            $servico->desativarDoisFatores($user);
+            $servico->solicitarAtivacaoDoisFatores($user);
+            $request->session()->put('fluxo_ativacao_2fa_pendente', true);
+            return back()->with('sucesso', 'Enviamos um código para seu e-mail. Confirme abaixo para ativar.');
         }
+        $servico->desativarDoisFatores($user);
+        $request->session()->forget('fluxo_ativacao_2fa_pendente');
 
-        return back()->with('sucesso', 'Configuração de verificação em dois fatores atualizada.');
+        return back()->with('sucesso', 'Verificação em duas etapas desativada.');
     }
 }

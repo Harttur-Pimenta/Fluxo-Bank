@@ -1,0 +1,62 @@
+name: Fluxo Bank — testes Laravel e frontend
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'feature/**'
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fluxo_test
+          POSTGRES_USER: fluxouser
+          POSTGRES_PASSWORD: fluxopass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fluxouser -d fluxo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+
+    defaults:
+      run:
+        working-directory: Projeto/backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          extensions: mbstring, dom, xml, pdo_pgsql, pgsql, curl, fileinfo, openssl
+          tools: composer:v2
+      - name: Instalar dependências PHP
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Validar arquivos PHP
+        run: |
+          find app routes database tests -type f -name '*.php' -print0 |
+            xargs -0 -n1 php -l >/dev/null
+          echo "Arquivos PHP: sintaxe válida."
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compilar frontend antes de testar Blade
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Testes com PostgreSQL 16
+        run: php artisan test --stop-on-failure
+        env:
+          APP_ENV: testing
+          LOG_CHANNEL: stderr

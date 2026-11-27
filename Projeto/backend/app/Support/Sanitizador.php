@@ -9,9 +9,11 @@ class Sanitizador
 {
     private const PROIBIDOS = [
         'password', 'password_confirmation', 'senha', 'nova_senha', 'nova_senha_confirmation',
-        'current_password', 'token', 'access_token', 'refresh_token', 'token_temporario',
+        'current_password', 'senha_atual', 'token', 'access_token', 'refresh_token', 'token_temporario',
         'token_redefinicao', 'authorization', 'cvv', 'cvv_hash', 'codigo', 'codigo_hash',
         'secret', 'api_key', '_token', 'payload_emv', 'linha_digitavel', 'valor_chave',
+        'codigo_teste', 'hash_payload', 'codigo_recuperacao', 'chave_pix',
+        'descricao', 'motivo', 'mensagem', 'resposta', 'endereco_entrega',
     ];
 
     private const MASCARADOS = ['cpf', 'cnpj', 'numero_cartao', 'cartao'];

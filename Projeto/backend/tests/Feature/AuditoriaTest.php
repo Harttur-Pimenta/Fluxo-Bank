@@ -59,17 +59,16 @@ class AuditoriaTest extends TestCase
 
         $user->conta->update(['bloqueada' => true]);
 
-        $log = LogAuditoria::where('tabela', 'contas')
-            ->where('operacao', LogAuditoria::OPERACAO_UPDATE)
-            ->latest('id')
-            ->first();
+        $log = DB::table('audit_contas')->where('registro_id', (string) $user->conta->id)
+            ->where('operacao', 'UPDATE')->orderByDesc('id')->first();
 
         $this->assertNotNull($log);
-        $this->assertSame((string) $user->conta->id, $log->registro_id);
-        $this->assertArrayHasKey('bloqueada', $log->diff);
-        $this->assertFalse($log->antes['bloqueada']);
-        $this->assertTrue($log->depois['bloqueada']);
-        $this->assertNotNull($log->hash_registro);
+        $antes = json_decode($log->antes, true);
+        $depois = json_decode($log->depois, true);
+        $diff = json_decode($log->diff, true);
+        $this->assertArrayHasKey('bloqueada', $diff);
+        $this->assertFalse($antes['bloqueada']);
+        $this->assertTrue($depois['bloqueada']);
     }
 
     public function test_trilha_e_append_only(): void

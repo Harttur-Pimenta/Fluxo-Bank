@@ -9,6 +9,8 @@ class CodigoVerificacao extends Model
 {
     public const FINALIDADE_LOGIN = 'LOGIN';
 
+    public const FINALIDADE_ATIVACAO_2FA = 'ATIVACAO_2FA';
+
     public const FINALIDADE_RETIRADA = 'RETIRADA';
 
     public const FINALIDADE_ALTERACAO_SENSIVEL = 'ALTERACAO_SENSIVEL';
