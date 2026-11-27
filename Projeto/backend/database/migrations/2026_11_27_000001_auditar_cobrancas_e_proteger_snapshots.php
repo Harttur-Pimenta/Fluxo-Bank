@@ -22,8 +22,11 @@ return new class extends Migration
                         CASE
                             WHEN lower(k) ~ '(password|senha|token|secret|segredo|codigo|cvv|authorization|api_key|chave_privada|pin|otp|hash|salt|payload|remember|session)'
                                 THEN to_jsonb('[PROTEGIDO]'::text)
-                            WHEN lower(k) IN ('cpf','cnpj','email','numero_cartao','cartao','documento','valor_chave','telefone','celular','phone')
+                            WHEN lower(k) IN ('cpf','cnpj','email','numero_cartao','cartao','documento','valor_chave','telefone','celular','phone',
+                                'descricao','mensagem','motivo','resposta','endereco','endereco_entrega','representante_legal')
                                 THEN to_jsonb('[MASCARADO]'::text)
+                            WHEN jsonb_typeof(v) IN ('object','array')
+                                THEN to_jsonb('[PROTEGIDO]'::text)
                             ELSE v END), '{}'::jsonb)
                        FROM jsonb_each(dados) AS x(k,v))
                 END;

@@ -13,6 +13,7 @@ class Sanitizador
         'token_redefinicao', 'authorization', 'cvv', 'cvv_hash', 'codigo', 'codigo_hash',
         'secret', 'api_key', '_token', 'payload_emv', 'linha_digitavel', 'valor_chave',
         'codigo_teste', 'hash_payload', 'codigo_recuperacao', 'chave_pix',
+        'descricao', 'motivo', 'mensagem', 'resposta', 'endereco_entrega',
     ];
 
     private const MASCARADOS = ['cpf', 'cnpj', 'numero_cartao', 'cartao'];
