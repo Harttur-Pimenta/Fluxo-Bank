@@ -6,6 +6,8 @@ use App\Services\AuthService;
 use App\Services\Servico2FA;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -58,16 +60,37 @@ class AuthController extends Controller
 
     public function ativarDoisFatores(Request $request): JsonResponse
     {
-        $this->auth->ativarDoisFatores($request->user());
+        $dados = $request->validate(['senha_atual' => 'required|string']);
+        $this->exigirSenhaAtual($request, $dados['senha_atual']);
+        $desafio = $this->auth->solicitarAtivacaoDoisFatores($request->user());
 
+        return response()->json([
+            'mensagem' => 'Código de ativação enviado por e-mail. Confirme antes de habilitar o 2FA.',
+            'expira_em' => $desafio['expira_em'],
+            'codigo_teste' => app()->environment(['local', 'testing']) ? $desafio['codigo'] : null,
+        ], 202);
+    }
+
+    public function confirmarAtivacaoDoisFatores(Request $request): JsonResponse
+    {
+        $dados = $request->validate(['codigo' => 'required|digits:6']);
+        $this->auth->ativarDoisFatores($request->user(), $dados['codigo']);
         return response()->json(['mensagem' => 'Verificação em dois fatores ativada.']);
     }
 
     public function desativarDoisFatores(Request $request): JsonResponse
     {
+        $dados = $request->validate(['senha_atual' => 'required|string']);
+        $this->exigirSenhaAtual($request, $dados['senha_atual']);
         $this->auth->desativarDoisFatores($request->user());
-
         return response()->json(['mensagem' => 'Verificação em dois fatores desativada.']);
+    }
+
+    private function exigirSenhaAtual(Request $request, string $senha): void
+    {
+        if (! Hash::check($senha, $request->user()->password)) {
+            throw ValidationException::withMessages(['senha_atual' => 'Senha atual incorreta.']);
+        }
     }
 
     public function refresh(Request $request): JsonResponse

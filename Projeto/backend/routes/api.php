@@ -60,8 +60,9 @@ Route::middleware(['auth:sanctum', '2fa.concluido', ContextoAuditoria::class, 'i
     Route::get('/eu', [AuthController::class, 'eu'])->name('eu');
 
     Route::post('/2fa/desafio', [AuthController::class, 'novoDesafio'])->name('2fa.desafio');
-    Route::post('/2fa/ativar', [AuthController::class, 'ativarDoisFatores'])->name('2fa.ativar');
-    Route::post('/2fa/desativar', [AuthController::class, 'desativarDoisFatores'])->name('2fa.desativar');
+    Route::post('/2fa/ativar', [AuthController::class, 'ativarDoisFatores'])->middleware('throttle:5,5')->name('2fa.ativar');
+    Route::post('/2fa/confirmar-ativacao', [AuthController::class, 'confirmarAtivacaoDoisFatores'])->middleware('throttle:5,5')->name('2fa.confirmar-ativacao');
+    Route::post('/2fa/desativar', [AuthController::class, 'desativarDoisFatores'])->middleware('throttle:5,5')->name('2fa.desativar');
 
     Route::get('/conta', [ContaController::class, 'show'])->name('conta.show');
     Route::get('/conta/extrato', [ContaController::class, 'extrato'])->name('conta.extrato');

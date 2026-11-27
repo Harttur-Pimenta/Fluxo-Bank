@@ -6,6 +6,7 @@ use App\Exceptions\RegraDeNegocioException;
 use App\Models\CodigoVerificacao;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 class Servico2FA
@@ -65,35 +66,26 @@ class Servico2FA
 
     public function validar(User $user, string $codigo, string $finalidade): CodigoVerificacao
     {
-        $registro = CodigoVerificacao::where('user_id', $user->id)
-            ->where('finalidade', $finalidade)
-            ->whereNull('utilizado_em')
-            ->latest('id')
-            ->first();
+        return DB::transaction(function () use ($user, $codigo, $finalidade) {
+            // O lock impede o uso concorrente do mesmo código em duas requisições.
+            $registro = CodigoVerificacao::where('user_id', $user->id)
+                ->where('finalidade', $finalidade)
+                ->whereNull('utilizado_em')
+                ->latest('id')->lockForUpdate()->first();
 
-        if (! $registro) {
-            throw new RegraDeNegocioException('Nenhum código pendente. Solicite um novo.', 401);
-        }
-
-        if ($registro->expira_em->isPast()) {
-            throw new RegraDeNegocioException('Código expirado. Solicite um novo.', 401);
-        }
-
-        if ($registro->tentativas >= $registro->max_tentativas) {
-            throw new RegraDeNegocioException('Número de tentativas excedido. Solicite um novo código.', 429);
-        }
-
-        if (! hash_equals($registro->codigo_hash, hash('sha256', $codigo))) {
-            $registro->increment('tentativas');
-
-            throw new RegraDeNegocioException(
-                'Código inválido. Tentativas restantes: '.max(0, $registro->max_tentativas - $registro->tentativas).'.',
-                401,
-            );
-        }
-
-        $registro->update(['utilizado_em' => now()]);
-
-        return $registro;
+            if (! $registro) throw new RegraDeNegocioException('Nenhum código pendente. Solicite um novo.', 401);
+            if ($registro->expira_em->isPast()) throw new RegraDeNegocioException('Código expirado. Solicite um novo.', 401);
+            if ($registro->tentativas >= $registro->max_tentativas) {
+                throw new RegraDeNegocioException('Número de tentativas excedido. Solicite um novo código.', 429);
+            }
+            if (! hash_equals($registro->codigo_hash, hash('sha256', $codigo))) {
+                $registro->increment('tentativas');
+                $registro->refresh();
+                throw new RegraDeNegocioException(
+                    'Código inválido. Tentativas restantes: '.max(0, $registro->max_tentativas - $registro->tentativas).'.', 401);
+            }
+            $registro->update(['utilizado_em' => now()]);
+            return $registro;
+        });
     }
 }

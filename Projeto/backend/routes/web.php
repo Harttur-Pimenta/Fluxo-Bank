@@ -110,7 +110,8 @@ Route::middleware([WebAuthenticated::class, ContextoAuditoria::class, 'throttle:
         Route::post('/perfil/bloquear', [BankActionController::class, 'bloquearConta'])->name('profile.block');
         Route::delete('/perfil/bloquear', [BankActionController::class, 'desbloquearConta'])->name('profile.unblock');
         Route::delete('/perfil/encerrar', [BankActionController::class, 'encerrarConta'])->name('profile.close');
-        Route::post('/perfil/2fa', [BankActionController::class, 'configurarDoisFatores'])->name('profile.2fa');
+        Route::post('/perfil/2fa', [BankActionController::class, 'configurarDoisFatores'])->middleware('throttle:5,5')->name('profile.2fa');
+        Route::post('/perfil/2fa/confirmar', [BankActionController::class, 'confirmarAtivacaoDoisFatores'])->middleware('throttle:5,5')->name('profile.2fa.confirm');
     });
 
     Route::prefix('administracao')->name('admin.')->middleware(WebBackoffice::class)->group(function () {
