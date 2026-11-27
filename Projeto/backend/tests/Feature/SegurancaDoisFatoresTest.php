@@ -48,6 +48,8 @@ class SegurancaDoisFatoresTest extends TestCase
         ])->assertOk();
         $this->assertTrue((bool) $user->refresh()->dois_fatores_ativo);
 
+        $this->assertSame(0, $user->tokens()->count(), 'Todos os tokens antigos devem ser revogados.');
+        $this->app['auth']->forgetGuards(); // Remove o cache de guarda da requisição anterior nos testes.
         $this->withHeaders($h)->getJson("{$this->api}/eu")->assertUnauthorized();
     }
 
