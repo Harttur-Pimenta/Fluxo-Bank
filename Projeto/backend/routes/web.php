@@ -37,12 +37,12 @@ Route::get('/', fn (Request $request) => $request->expectsJson()
 
 Route::prefix('acesso')->name('web.')->middleware('guest:web')->group(function () {
     Route::get('/entrar', [AuthWebController::class, 'loginPage'])->name('login');
-    Route::post('/entrar', [AuthWebController::class, 'login'])->middleware('throttle:10,1')->name('login.store');
+    Route::post('/entrar', [AuthWebController::class, 'login'])->middleware([ContextoAuditoria::class, 'throttle:10,1'])->name('login.store');
     Route::get('/verificar', [AuthWebController::class, 'twoFactorPage'])->name('2fa');
-    Route::post('/verificar', [AuthWebController::class, 'twoFactorVerify'])->middleware('throttle:10,1')->name('2fa.verify');
-    Route::post('/verificar/reenviar', [AuthWebController::class, 'twoFactorResend'])->middleware('throttle:3,5')->name('2fa.resend');
+    Route::post('/verificar', [AuthWebController::class, 'twoFactorVerify'])->middleware([ContextoAuditoria::class, 'throttle:10,1'])->name('2fa.verify');
+    Route::post('/verificar/reenviar', [AuthWebController::class, 'twoFactorResend'])->middleware([ContextoAuditoria::class, 'throttle:3,5'])->name('2fa.resend');
     Route::get('/cadastro', [AuthWebController::class, 'registrationPage'])->name('register');
-    Route::post('/cadastro', [AuthWebController::class, 'register'])->middleware('throttle:10,1')->name('register.store');
+    Route::post('/cadastro', [AuthWebController::class, 'register'])->middleware([ContextoAuditoria::class, 'throttle:10,1'])->name('register.store');
     Route::get('/recuperar', [AuthWebController::class, 'recoveryPage'])->name('recovery');
     Route::post('/recuperar/solicitar', [AuthWebController::class, 'recoveryRequest'])->middleware('throttle:10,1')->name('recovery.request');
     Route::post('/recuperar/validar', [AuthWebController::class, 'recoveryValidate'])->middleware('throttle:10,1')->name('recovery.validate');

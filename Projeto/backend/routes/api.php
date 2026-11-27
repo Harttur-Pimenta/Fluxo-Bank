@@ -35,9 +35,9 @@ Route::get('/openapi.yaml', function () {
     ]);
 })->name('api.openapi');
 
-Route::post('/cadastro', [CadastroController::class, 'store'])->name('cadastro');
+Route::post('/cadastro', [CadastroController::class, 'store'])->middleware(ContextoAuditoria::class)->name('cadastro');
 Route::post('/login', [AuthController::class, 'login'])
-    ->middleware('throttle:10,1')
+    ->middleware([ContextoAuditoria::class, 'throttle:10,1'])
     ->name('login');
 
 Route::post('/token/renovar', [AuthController::class, 'renovarSessao'])
@@ -50,7 +50,7 @@ Route::prefix('senha/recuperacao')->middleware('throttle:10,1')->group(function 
 });
 
 Route::post('/2fa/validar', [AuthController::class, 'validarDoisFatores'])
-    ->middleware(['auth:sanctum', 'throttle:10,1'])
+    ->middleware(['auth:sanctum', ContextoAuditoria::class, 'throttle:10,1'])
     ->name('2fa.validar');
 
 Route::middleware(['auth:sanctum', '2fa.concluido', ContextoAuditoria::class, 'idempotencia'])->group(function () {

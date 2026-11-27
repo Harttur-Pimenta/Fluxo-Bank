@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\AuditoriaService;
+use App\Exceptions\RegraDeNegocioException;
 use App\Support\Sanitizador;
 use Closure;
 use Illuminate\Http\Request;
@@ -25,7 +26,9 @@ class AuditoriaRequisicao
             $response = $next($request);
         } catch (\Throwable $erro) {
             $status = $erro instanceof HttpExceptionInterface ? $erro->getStatusCode() : 500;
-            if ($erro instanceof \Illuminate\Validation\ValidationException) {
+            if ($erro instanceof RegraDeNegocioException) {
+                $status = $erro->statusHttp();
+            } elseif ($erro instanceof \Illuminate\Validation\ValidationException) {
                 $status = $erro->status;
             } elseif ($erro instanceof \Illuminate\Auth\AuthenticationException) {
                 $status = 401;
